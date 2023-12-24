@@ -19,11 +19,13 @@ class Address {
 private:
     friend class Socket;
     friend class ServerSocket;
-    sockaddr_in address_;
+    sockaddr_in address_{};
     std::string ip_;
     int port_;
 public:
     Address(const std::string& ip, int port);
+    explicit Address(const sockaddr& address);
+
     [[nodiscard]] const std::string& getIp() const;
     [[nodiscard]] int getPort() const;
     [[nodiscard]] std::string toString() const;
@@ -31,8 +33,8 @@ public:
     bool operator==(const Address& another) const;
     bool operator!=(const Address& another) const;
 
-
 };
 
+std::ostream &operator<<(std::ostream &os, const Address &address);
 
 #endif //LAB6SOCKET_ADDRESS_H

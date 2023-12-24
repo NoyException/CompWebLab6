@@ -3,10 +3,12 @@
 //
 
 #include "ServerSocket.h"
+#include "Address.h"
 
 #ifdef __linux__
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <pcap/socket.h>
 #endif
 #ifdef _WIN32
 #include <winsock2.h>
@@ -34,6 +36,7 @@ void ServerSocket::bind(const Address& address) {
     if (::bind(fd_, (sockaddr*)&address.address_, sizeof(address.address_)) < 0) {
         throw std::runtime_error("bind error");
     }
+    port_ = address.port_;
 }
 
 void ServerSocket::bind(const std::string& ip, int port) {
@@ -44,11 +47,12 @@ void ServerSocket::bind(int port) {
     sockaddr_in serv_addr{};
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    serv_addr.sin_addr.S_un.S_addr = INADDR_ANY;
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
     if (::bind(fd_, (sockaddr*)&serv_addr, sizeof(serv_addr)) == SOCKET_ERROR) {
         perror("bind error");
         throw std::runtime_error("bind error");
     }
+    port_ = port;
 }
 
 void ServerSocket::listen() {
@@ -58,15 +62,17 @@ void ServerSocket::listen() {
     }
 }
 
-Socket ServerSocket::accept() {
-    SOCKADDR t;
-    int len = sizeof(SOCKADDR);
+std::unique_ptr<Socket> ServerSocket::accept() {
+    sockaddr t{};
+    socklen_t len = sizeof(sockaddr);
     int client_fd = ::accept(fd_, &t, &len);
     if (client_fd < 0) {
         perror("accept error");
         throw std::runtime_error("accept error");
     }
-    return {client_fd};
+    auto socket = std::make_unique<Socket>(client_fd);
+    socket->address_ = Address(t);
+    return socket;
 }
 
 void ServerSocket::close() {
@@ -77,6 +83,9 @@ void ServerSocket::close() {
 }
 
 bool ServerSocket::isClosed() const {
-    char buf;
-    return send(fd_, &buf, 0, 0) == -1;
+    return fd_ == -1;
+}
+
+int ServerSocket::getPort() const {
+    return port_;
 }
