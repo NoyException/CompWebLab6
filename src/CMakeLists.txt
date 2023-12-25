@@ -8,8 +8,3 @@ set(BUILD_SHARED_LIBS OFF)
 
 add_subdirectory(client)
 add_subdirectory(server)
-
-add_executable(test test.cpp)
-if (WIN32)
-    target_link_libraries(test ws2_32)
-endif ()
