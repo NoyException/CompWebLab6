@@ -53,7 +53,7 @@ void Server::start() {
 
 void Server::stop() {
     running_ = false;
-    if (heartbeat_ != nullptr)
+    if(heartbeat_ != nullptr)
         heartbeat_->join();
     for (auto &handler: socketHandlers_) {
         handler->disconnect();
@@ -64,11 +64,21 @@ Server::SocketHandler::SocketHandler(Server *server, std::unique_ptr<Socket> soc
         server_(server),
         socket_(std::move(socket)),
         timestamp_(-1),
-        thread_([this]() {
+        receiver_([this]() {
             while (running_) {
                 receive();
             }
-        }) {}
+        }),
+        sender_([this]() {
+            while (running_) {
+                while (!messages_.empty()) {
+                    messages_.front()(*socket_);
+                    messages_.pop();
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }) {
+}
 
 void Server::SocketHandler::receive() {
     char c = socket_->readChar();
@@ -87,13 +97,17 @@ void Server::SocketHandler::receive() {
 
             auto it = server_->idToSocketHandler_.find(dest);
             if (it != server_->idToSocketHandler_.end()) {
-                it->second->socket_->writeChar(static_cast<char>(MessageType::SEND_MESSAGE));
-                it->second->socket_->writeString(id_);
-                it->second->socket_->writeString(message);
+                it->second->send([=](Socket& socket){
+                    socket.writeChar(static_cast<char>(MessageType::SEND_MESSAGE));
+                    socket.writeString(id_);
+                    socket.writeString(message);
+                });
             } else {
-                socket_->writeChar(static_cast<char>(MessageType::SEND_MESSAGE));
-                socket_->writeString("[Server]");
-                socket_->writeString("User not found");
+                send([](Socket& socket){
+                    socket.writeChar(static_cast<char>(MessageType::SEND_MESSAGE));
+                    socket.writeString("[Server]");
+                    socket.writeString("User not found");
+                });
             }
             break;
         }
@@ -106,8 +120,7 @@ void Server::SocketHandler::receive() {
                       << s
                       << std::endl;
 
-            socket_->writeChar(static_cast<char>(MessageType::GET));
-            socket_->writeInt(requestId);
+            std::string data = "Unknown request";
 
             if (s == "users") {
                 std::stringstream ss;
@@ -115,28 +128,31 @@ void Server::SocketHandler::receive() {
                 for (auto &it: server_->idToSocketHandler_) {
                     ss << std::endl << it.first << " from " << *it.second->socket_->getAddress();
                 }
-                socket_->writeString(ss.str());
-            }
-            else if (s == "time") {
+                data = ss.str();
+            } else if (s == "time") {
                 auto now = std::chrono::system_clock::now();
                 auto time = std::chrono::system_clock::to_time_t(now);
                 std::tm *tm = std::localtime(&time);
                 std::stringstream ss;
                 ss << std::put_time(tm, "%Y-%m-%d %H:%M:%S");
-                socket_->writeString(ss.str());
-            }
-            else if (s == "name") {
+                data = ss.str();
+            } else if (s == "name") {
                 char computerName[MAX_COMPUTERNAME_LENGTH + 1];
                 DWORD size = sizeof(computerName) / sizeof(computerName[0]);
 
                 if (GetComputerName(computerName, &size)) {
-                    socket_->writeString(std::string(computerName));
+                    data = std::string(computerName);
                 } else {
                     std::cerr << "Failed to get computer name." << std::endl;
                 }
-            } else {
-                socket_->writeString("Unknown request");
             }
+
+            send([=](Socket& socket){
+                socket.writeChar(static_cast<char>(MessageType::GET));
+                socket.writeInt(requestId);
+                socket.writeString(data);
+            });
+
             break;
         }
         case MessageType::CONNECT:
@@ -144,9 +160,11 @@ void Server::SocketHandler::receive() {
             id_ = socket_->readString();
             if (server_->idToSocketHandler_.find(id_) != server_->idToSocketHandler_.end()) {
                 id_ = "";
-                socket_->writeChar(static_cast<char>(MessageType::SEND_MESSAGE));
-                socket_->writeString("[Server]");
-                socket_->writeString("User already exists");
+                send([](Socket& socket){
+                    socket.writeChar(static_cast<char>(MessageType::SEND_MESSAGE));
+                    socket.writeString("[Server]");
+                    socket.writeString("User already exists");
+                });
                 break;
             }
 
@@ -160,6 +178,8 @@ void Server::SocketHandler::receive() {
                       << " disconnect"
                       << std::endl;
             running_ = false;
+            if (sender_.joinable())
+                sender_.join();
             socket_->writeChar(static_cast<char>(MessageType::DISCONNECT));
             socket_->close();
             break;
@@ -173,16 +193,18 @@ void Server::SocketHandler::receive() {
 
 void Server::SocketHandler::disconnect() {
     running_ = false;
+    if (sender_.joinable())
+        sender_.join();
     socket_->writeChar(static_cast<char>(MessageType::DISCONNECT));
     socket_->close();
-    if (thread_.joinable())
-        thread_.join();
+    if (receiver_.joinable())
+        receiver_.join();
 }
 
 Server::SocketHandler::~SocketHandler() {
     running_ = false;
-    if (thread_.joinable())
-        thread_.join();
+    if (receiver_.joinable())
+        receiver_.join();
 }
 
 bool Server::SocketHandler::isTimeout() const {
@@ -199,3 +221,6 @@ const std::string &Server::SocketHandler::getId() const {
     return id_;
 }
 
+void Server::SocketHandler::send(const std::function<void(Socket &)> &message) {
+    messages_.emplace(message);
+}
