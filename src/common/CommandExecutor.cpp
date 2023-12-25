@@ -10,7 +10,7 @@
 
 CommandExecutor::CommandExecutor() {
     commands_["help"] = [this](std::string args[]) {
-        std::cout << "Available commands:" << std::endl;
+        std::cout << "* Available commands:" << std::endl;
         for (auto &command : commands_) {
             std::cout << command.first << std::endl;
         }
@@ -27,7 +27,7 @@ void CommandExecutor::execute(const std::string& command) {
 
 void CommandExecutor::execute(std::string args[]) {
     if (commands_.find(args[0]) == commands_.end()) {
-        std::cout << "Command not found: " << args[0] << std::endl;
+        std::cout << "* Command not found: " << args[0] << std::endl;
         return;
     }
     commands_[args[0]](args);

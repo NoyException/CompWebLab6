@@ -59,7 +59,7 @@ void SocketHandler::connect(const Address &address, const std::string &id) {
     });
 
     send([this, address](Socket &socket) {
-        std::cout << "connect to " << address << " as " << id_ << std::endl;
+        std::cout << "* connect to " << address << " as " << id_ << std::endl;
         auto type = static_cast<char>(MessageType::CONNECT);
         socket.writeChar(type);
         socket.writeString(id_);
@@ -117,11 +117,11 @@ void SocketHandler::receive() {
     auto type = static_cast<MessageType>(c);
     switch (type) {
         case MessageType::SEND_MESSAGE:
-            std::cout << socket_.readString() << ": " << socket_.readString() << std::endl;
+            std::cout << "* " << socket_.readString() << ": " << socket_.readString() << std::endl;
             break;
         case MessageType::DISCONNECT:
             if (connected_) {
-                std::cout << "disconnect" << std::endl;
+                std::cout << "* disconnect" << std::endl;
                 close(false);
             }
             break;

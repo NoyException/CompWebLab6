@@ -18,7 +18,7 @@ private:
     TCPSocket socket_;
     std::queue<std::function<void(Socket&)>> messages_;
     bool connected_{};
-    int nextRequestId_;
+    int nextRequestId_{};
     std::unordered_map<int, std::promise<std::string>*> requests_;
 
     std::thread* receiver_ = nullptr;

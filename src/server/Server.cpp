@@ -77,6 +77,14 @@ void Server::SocketHandler::receive() {
         case MessageType::SEND_MESSAGE: {
             std::string dest = socket_->readString();
             std::string message = socket_->readString();
+
+            std::cout << id_
+                      << " send to "
+                      << dest
+                      << ": "
+                      << message
+                      << std::endl;
+
             auto it = server_->idToSocketHandler_.find(dest);
             if (it != server_->idToSocketHandler_.end()) {
                 it->second->socket_->writeChar(static_cast<char>(MessageType::SEND_MESSAGE));
@@ -93,6 +101,11 @@ void Server::SocketHandler::receive() {
             int requestId = socket_->readInt();
             std::string s = socket_->readString();
 
+            std::cout << id_
+                      << " request "
+                      << s
+                      << std::endl;
+
             socket_->writeChar(static_cast<char>(MessageType::GET));
             socket_->writeInt(requestId);
 
@@ -103,14 +116,16 @@ void Server::SocketHandler::receive() {
                     ss << std::endl << it.first << " from " << *it.second->socket_->getAddress();
                 }
                 socket_->writeString(ss.str());
-            } else if (s == "time") {
+            }
+            else if (s == "time") {
                 auto now = std::chrono::system_clock::now();
                 auto time = std::chrono::system_clock::to_time_t(now);
                 std::tm *tm = std::localtime(&time);
                 std::stringstream ss;
                 ss << std::put_time(tm, "%Y-%m-%d %H:%M:%S");
                 socket_->writeString(ss.str());
-            } else if (s == "name") {
+            }
+            else if (s == "name") {
                 char computerName[MAX_COMPUTERNAME_LENGTH + 1];
                 DWORD size = sizeof(computerName) / sizeof(computerName[0]);
 
